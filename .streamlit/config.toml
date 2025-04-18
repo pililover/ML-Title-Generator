@@ -1,0 +1,7 @@
+[theme]
+base="dark"
+primaryColor="#ffffff"               # Màu chủ đạo trắng
+backgroundColor="#121212"           # Nền đen hiện đại
+secondaryBackgroundColor="#1e1e1e"  # Màu nền phụ tối
+textColor="#ffffff"                 # Chữ trắng
+font="sans serif"
