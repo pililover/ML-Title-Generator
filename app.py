@@ -3,30 +3,67 @@ from dotenv import load_dotenv
 import os
 
 from underthesea import word_tokenize
-from transformers import EncoderDecoderModel, AutoTokenizer
+from transformers import EncoderDecoderModel, AutoModelForSeq2SeqLM, AutoTokenizer
 import torch
 
 st.set_page_config(page_title="Trình sinh tiêu đề", layout="centered")
 
+# Config
 torch.classes.__path__ = [] # add this line to manually set it to empty. 
+load_dotenv()
+HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+
+# List model nè
+TITLE_MODELS = {
+    "PhoBERT Encoder-Decoder": {
+        "model_path": "PuppetLover/Title_generator",
+        "tokenizer_path": "PuppetLover/Finetune_PhoBert",
+        "use_auth_token": True,
+        "model_type": "encoder-decoder"  
+    },
+    "ViT5 Title Generator": {
+        "model_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
+        "tokenizer_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
+        "use_auth_token": False,
+        "model_type": "seq2seq"  
+    },
+    "BARTpho Title Generator": {
+        "model_path": "HTThuanHcmus/bartpho-finetune",
+        "tokenizer_path": "HTThuanHcmus/bartpho-finetune",
+        "use_auth_token": False,
+        "model_type": "seq2seq"  
+    }
+}
+
+SUMMARIZATION_MODELS = {
+}
 
 # Load pre-trained model và tokenizer nhe
 @st.cache_resource
+def load_model_and_tokenizer(model_path, tokenizer_path, model_type, use_auth_token=False):
+    try:
+        token_arg = HUGGINGFACE_TOKEN if use_auth_token and HUGGINGFACE_TOKEN else None
 
-def load_model_and_tokenizer():
-    model_name = "PuppetLover/Title_generator"  # Hugging Face model repo
-    tokenizer_name = "PuppetLover/Finetune_PhoBert"   # Tokenizer for PhoBERT
-    token = os.getenv("HUGGINGFACE_TOKEN")  
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
 
-    # Load lên
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
-    model = EncoderDecoderModel.from_pretrained(model_name, use_auth_token=token)
-    model.to("cuda" if torch.cuda.is_available() else "cpu")
-    return model, tokenizer
+        # Load the appropriate model type
+        if model_type == "encoder-decoder":
+            model = EncoderDecoderModel.from_pretrained(model_path, use_auth_token=token_arg)
+        elif model_type == "seq2seq":
+            model = AutoModelForSeq2SeqLM.from_pretrained(model_path, use_auth_token=token_arg)
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
 
-model, tokenizer = load_model_and_tokenizer()
+        model.to("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Model and tokenizer loaded successfully for {model_path}.")
+        return model, tokenizer
+    except Exception as e:
+        st.error(f"Lỗi tải mô hình '{model_path}' hoặc tokenizer '{tokenizer_path}': {e}")
+        print(f"Error loading model/tokenizer: {e}")
+        return None, None
 
-# Dưới này là app configuration nè
+
+# Dưới này là Sidebar cho History
 if "show_sidebar" not in st.session_state:
     st.session_state.show_sidebar = False
 
@@ -41,6 +78,7 @@ if st.session_state.show_sidebar:
         st.write("- Cuộc trò chuyện 2: *Tiêu đề sinh từ đoạn B*")
         st.write("- ...")
 
+# Một chút styling
 st.markdown("""
     <style>
         textarea {
@@ -52,46 +90,148 @@ st.markdown("""
             color: white;
             border: 1px solid #ffffff30;
             border-radius: 8px;
+            width: 100%; /* Make button full width */
+            margin-top: 10px;
         }
         .stButton > button:hover {
             background-color: #444444;
         }
+        /* Style radio buttons */
+        div[role="radiogroup"] label {
+            margin-right: 15px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
+# Main app
 st.markdown("<h1 style='text-align: center; color: white;'>Trình sinh tiêu đề thông minh</h1>", unsafe_allow_html=True)
 
-# User sẽ input ở đây
-text_input = st.text_area("Nhập đoạn văn của bạn:", height=200)
+# 1. Chọn task
+task_option = st.radio(
+    "Chọn chức năng bạn muốn:",
+    ('Sinh tiêu đề', 'Tóm tắt nội dung'),
+    horizontal=True, # Display options side-by-side
+    key="task_selection"
+)
 
-# Nơi sinh tiêu đề nè
-if st.button("Sinh tiêu đề"):
-    if text_input.strip():
-        # Preprocess input
-        text_input = word_tokenize(text_input, format="text")
-        
-        inputs = tokenizer(
-            text_input,
-            padding="max_length",
-            truncation=True,
-            max_length=256,
-            return_tensors="pt"
-        )
-        inputs = {key: value.to("cuda" if torch.cuda.is_available() else "cpu") for key, value in inputs.items()}
+# 2. Chọn model (conditional, có thể bỏ qua)
+selected_model_key = None
+model_config = None
 
-        # Generate title
-        outputs = model.generate(
-            inputs["input_ids"],
-            max_length=80,
-            num_beams=4,
-            early_stopping=True
-        )
-        title = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+if task_option == 'Sinh tiêu đề':
+    selected_model_key = st.selectbox(
+        "Chọn mô hình sinh tiêu đề:",
+        list(TITLE_MODELS.keys()),
+        key="title_model_selector"
+    )
+    model_config = TITLE_MODELS[selected_model_key]
 
-        # Hiển thị tiêu đề ở đây
-        st.markdown(f"<h2 style='text-align: center; color: #cccccc;'>{title}</h2>", unsafe_allow_html=True)
+elif task_option == 'Tóm tắt nội dung':
+    selected_model_key = st.selectbox(
+        "Chọn mô hình tóm tắt:",
+        list(SUMMARIZATION_MODELS.keys()),
+        key="summary_model_selector"
+    )
+    model_config = SUMMARIZATION_MODELS[selected_model_key]
+
+# 3. Text input
+text_input = st.text_area("Nhập đoạn văn của bạn:", height=200, key="text_input_area")
+
+# Tạo nút và xử lí logic
+button_label = f"{task_option}" 
+if st.button(button_label, key="generate_button"):
+    if not model_config:
+        st.warning("Vui lòng chọn mô hình.")
+    elif not text_input.strip():
+        st.warning("Vui lòng nhập văn bản trước khi thực hiện.")
     else:
-        st.warning("Vui lòng nhập văn bản trước khi nhấn sinh tiêu đề.")
+        # Load model được chọn và tokenizer
+        model, tokenizer = load_model_and_tokenizer(
+            model_config["model_path"],
+            model_config["tokenizer_path"],
+            model_config["model_type"],  # Pass model type
+            model_config.get("use_auth_token", False) 
+        )
 
-st.markdown("---")
-st.caption("Made by My group ✨")
+        if model and tokenizer:
+            # Tiền xử lí input - underthesea
+            processed_text = word_tokenize(text_input, format="text")
+
+            try:
+                # --- Tokenization ---
+                inputs = tokenizer(
+                    processed_text,
+                    padding="max_length",
+                    truncation=True,
+                    max_length=256, 
+                    return_tensors="pt"
+                )
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                inputs = {key: value.to(device) for key, value in inputs.items()}
+
+                # --- Generation ---
+                progress_message = st.empty()  # Tạo placeholder cho thông báo
+                progress_message.info(f"Đang {task_option.lower()} với mô hình: '{selected_model_key}'...")  # Hiển thị thông báo
+
+                with torch.no_grad(): # no_grad cho reference
+                    if task_option == 'Sinh tiêu đề':
+                        outputs = model.generate(
+                            inputs["input_ids"],
+                            max_length=80,      # Max length cho title
+                            num_beams=5,        # Beam search
+                            early_stopping=True,
+                            no_repeat_ngram_size=2 # repetition
+                        )
+                    # elif task_option == 'Tóm tắt nội dung':
+                        # outputs = model.generate(
+                        # )
+                    else:
+                        st.error("Tác vụ không xác định.")
+                        outputs = None
+
+                if outputs is not None:
+                    # Decode và hiện kết quả
+                    result = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+
+                    # --- Hiện kết quả ---
+                    st.markdown("---")
+                    result_label = "Tiêu đề được tạo:" if task_option == 'Sinh tiêu đề' else "Nội dung tóm tắt:"
+                    st.markdown(f"<h3 style='color: #cccccc;'>{result_label}</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='color: white; background-color: #2a2a2a; padding: 10px; border-radius: 5px;'>{result}</p>", unsafe_allow_html=True)
+                    # Thêm res vào history
+                    
+                progress_message.empty() # Xóa thông báo sau khi hoàn tất
+
+            except Exception as e:
+                st.error(f"Đã xảy ra lỗi trong quá trình xử lý: {e}")
+                print(f"Error during processing: {e}")
+# if st.button("Sinh tiêu đề"):
+#     if text_input.strip():
+#         # Preprocess input
+#         text_input = word_tokenize(text_input, format="text")
+        
+#         inputs = tokenizer(
+#             text_input,
+#             padding="max_length",
+#             truncation=True,
+#             max_length=256,
+#             return_tensors="pt"
+#         )
+#         inputs = {key: value.to("cuda" if torch.cuda.is_available() else "cpu") for key, value in inputs.items()}
+
+#         # Generate title
+#         outputs = model.generate(
+#             inputs["input_ids"],
+#             max_length=80,
+#             num_beams=4,
+#             early_stopping=True
+#         )
+#         title = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+
+#         # Hiển thị tiêu đề ở đây
+#         st.markdown(f"<h2 style='text-align: center; color: #cccccc;'>{title}</h2>", unsafe_allow_html=True)
+#     else:
+#         st.warning("Vui lòng nhập văn bản trước khi nhấn sinh tiêu đề.")
+
+# st.markdown("---")
+# st.caption("Made by My group ✨")
