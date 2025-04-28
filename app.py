@@ -108,32 +108,69 @@ if st.session_state.show_sidebar:
                             st.session_state.selected_history_index = None
                         st.rerun()
 
-# Một chút css
+# Một chút CSS
 st.markdown("""
     <style>
+        body {
+            background-color: #0e1117;
+            color: #ffffff;
+        }
         textarea {
             background-color: #1e1e1e !important;
-            color: white !important;
+            color: #ffffff !important;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #ffffff30 !important;
+            border-radius: 10px !important;
         }
         .stButton > button {
-            background-color: #333333;
+            background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
             color: white;
-            border: 1px solid #ffffff30;
+            border: none;
             border-radius: 8px;
-            width: 100%;
+            padding: 10px 20px;
             margin-top: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
         }
         .stButton > button:hover {
-            background-color: #444444;
+            background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+            transform: scale(1.02);
         }
         div[role="radiogroup"] label {
             margin-right: 15px;
+            background-color: #2c2f36;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        div[role="radiogroup"] input:checked + label {
+            background-color: #0078FF;
+            color: white;
+        }
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+        }
+        /* Cards for output */
+        .card {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
         }
     </style>
 """, unsafe_allow_html=True)
 
 # Main App
-st.markdown("<h1 style='text-align: center; color: white;'>Trình sinh tiêu đề và tóm tắt</h1>", unsafe_allow_html=True)
+#st.markdown("<h1 style='text-align: center; color: white;'>Trình sinh tiêu đề và tóm tắt</h1>", unsafe_allow_html=True)
+st.markdown("""
+    <h1 style='text-align: center; color: white; font-family: "Segoe UI", sans-serif;'>
+        🎯Trình Sinh Tiêu Đề & Tóm Tắt
+    </h1>
+""", unsafe_allow_html=True)
 
 task_option = st.radio(
     "Chọn chức năng bạn muốn:",
@@ -206,17 +243,16 @@ if st.button(button_label, key="generate_button"):
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 inputs = {key: value.to(device) for key, value in inputs.items()}
 
-                progress_message = st.empty()
-                progress_message.info(f"Đang {task_option.lower()} với mô hình: '{selected_model_key}'...")
+                with st.spinner(f"⏳ Đang {task_option.lower()} với mô hình '{selected_model_key}'..."):
 
-                with torch.no_grad():
-                    outputs = model.generate(
-                        inputs["input_ids"],
-                        max_length=80 if task_option == 'Sinh tiêu đề' else 200,
-                        num_beams=5,
-                        early_stopping=True,
-                        no_repeat_ngram_size=2
-                    )
+                    with torch.no_grad():
+                        outputs = model.generate(
+                            inputs["input_ids"],
+                            max_length=80 if task_option == 'Sinh tiêu đề' else 200,
+                            num_beams=5,
+                            early_stopping=True,
+                            no_repeat_ngram_size=2
+                        )
 
                 result = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
 
@@ -231,7 +267,7 @@ if st.button(button_label, key="generate_button"):
                 })
                 st.session_state.selected_history_index = None
 
-                progress_message.empty()
+                #progress_message.empty()
 
                 st.rerun()
 
