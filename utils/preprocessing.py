@@ -9,15 +9,5 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def tokenize_text(text):
+def segment_text(text):
     return word_tokenize(text, format="text")
-
-def preprocess_input(text):
-    cleaned_text = clean_text(text)
-    tokenized_text = tokenize_text(cleaned_text)
-    return tokenized_text
-
-def extract_vocab(text):
-    cleaned_text = clean_text(text)
-    tokenized_text = tokenize_text(cleaned_text)
-    return tokenized_text.split()  # Tách từ

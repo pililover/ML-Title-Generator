@@ -9,6 +9,8 @@ from transformers import EncoderDecoderModel, AutoModelForSeq2SeqLM, AutoTokeniz
 import torch
 import logging
 import transformers
+from utils.preprocessing import clean_text, segment_text
+
 
 # Giảm bớt cảnh báo
 logging.getLogger('streamlit.runtime.scriptrunner.script_run_context').setLevel(logging.ERROR)
@@ -26,20 +28,20 @@ HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 TITLE_MODELS = {
     "PhoBERT Encoder-Decoder": {
         "model_path": "PuppetLover/Title_generator",
-        "tokenizer_path": "PuppetLover/Finetune_PhoBert",
-        "use_auth_token": True,
+        "tokenizer_path": "vinai/phobert-base-v2",
+        "token": True,
         "model_type": "encoder-decoder"
     },
     "ViT5 Title Generator": {
         "model_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
         "tokenizer_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
-        "use_auth_token": False,
+        "token": False,
         "model_type": "seq2seq"
     },
     "BARTpho Title Generator": {
         "model_path": "HTThuanHcmus/bartpho-finetune",
         "tokenizer_path": "HTThuanHcmus/bartpho-finetune",
-        "use_auth_token": False,
+        "token": False,
         "model_type": "seq2seq"
     }
 }
@@ -48,20 +50,20 @@ SUMMARIZATION_MODELS = {
     "ViT5 Summarization": {
         "model_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
         "tokenizer_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
-        "use_auth_token": False,
+        "token": False,
         "model_type": "seq2seq"
     }
 }
 
 # Cache load model/tokenizer
 @st.cache_resource
-def load_model_and_tokenizer(model_path, tokenizer_path, model_type, use_auth_token=False):
-    token_arg = HUGGINGFACE_TOKEN if use_auth_token and HUGGINGFACE_TOKEN else None
+def load_model_and_tokenizer(model_path, tokenizer_path, model_type, token=False):
+    token_arg = HUGGINGFACE_TOKEN if token and HUGGINGFACE_TOKEN else None
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
     if model_type == "encoder-decoder":
-        model = EncoderDecoderModel.from_pretrained(model_path, use_auth_token=token_arg)
+        model = EncoderDecoderModel.from_pretrained(model_path, token=token_arg)
     elif model_type == "seq2seq":
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_path, use_auth_token=token_arg)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_path, token=token_arg)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     model.to("cuda" if torch.cuda.is_available() else "cpu")
@@ -226,11 +228,15 @@ if st.button(button_label, key="generate_button"):
             model_config["model_path"],
             model_config["tokenizer_path"],
             model_config["model_type"],
-            model_config.get("use_auth_token", False)
+            model_config.get("token", False)
         )
 
         if model and tokenizer:
-            processed_text = word_tokenize(text_input, format="text")
+            if model_config["model_type"] == "encoder-decoder":
+                processed_text = clean_text(text_input)
+                processed_text = segment_text(processed_text)
+            else:
+                processed_text = clean_text(text_input)
 
             try:
                 inputs = tokenizer(
