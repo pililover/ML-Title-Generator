@@ -1,16 +1,14 @@
 import streamlit as st
-from dotenv import load_dotenv
 import os
 import time
 from datetime import datetime
-
 from underthesea import word_tokenize
 from transformers import EncoderDecoderModel, AutoModelForSeq2SeqLM, AutoTokenizer
 import torch
 import logging
 import transformers
+import google.generativeai as genai
 from utils.preprocessing import clean_text, segment_text
-
 
 # Giảm bớt cảnh báo
 logging.getLogger('streamlit.runtime.scriptrunner.script_run_context').setLevel(logging.ERROR)
@@ -19,10 +17,9 @@ transformers.logging.set_verbosity_error()
 # Cấu hình Streamlit
 st.set_page_config(page_title="Trình sinh tiêu đề", layout="centered")
 
-# Load biến môi trường
-torch.classes.__path__ = []
-load_dotenv()
-HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+# Cấu hình Gemini API (thay YOUR_GEMINI_API_KEY bằng API key thực tế)
+GEMINI_API_KEY = "AIzaSyCAAhuSX60JYbS8eSRa_0dRZBri0mqUr_M"  # Thay bằng API key thực tế của bạn
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Các mô hình
 TITLE_MODELS = {
@@ -43,23 +40,44 @@ TITLE_MODELS = {
         "tokenizer_path": "HTThuanHcmus/bartpho-finetune",
         "token": False,
         "model_type": "seq2seq"
+    },
+    "Gemini Title Generator": {
+        "model_path": "gemini-1.5-pro",
+        "tokenizer_path": None,
+        "token": False,
+        "model_type": "gemini"
     }
 }
 
 SUMMARIZATION_MODELS = {
     "ViT5 Summarization": {
-        "model_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
-        "tokenizer_path": "HTThuanHcmus/vit5-base-vietnews-summarization-finetune",
+        "model_path": "HTThuanHcmus/vit5-summarization-news-finetune",
+        "tokenizer_path": "HTThuanHcmus/vit5-summarization-news-finetune",
         "token": False,
         "model_type": "seq2seq"
+    },
+    "BARTpho Summarization": {
+        "model_path": "HTThuanHcmus/bartpho-summarization-news-finetune",
+        "tokenizer_path": "HTThuanHcmus/bartpho-summarization-news-finetune",
+        "token": False,
+        "model_type": "seq2seq"
+    },
+    "Gemini Summarization": {
+        "model_path": "gemini-1.5-pro",
+        "tokenizer_path": None,
+        "token": False,
+        "model_type": "gemini"
     }
 }
 
 # Cache load model/tokenizer
 @st.cache_resource
 def load_model_and_tokenizer(model_path, tokenizer_path, model_type, token=False):
-    token_arg = HUGGINGFACE_TOKEN if token and HUGGINGFACE_TOKEN else None
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
+    if model_type == "gemini":
+        model = genai.GenerativeModel(model_path)
+        return model, None
+    token_arg = None
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False) if tokenizer_path else None
     if model_type == "encoder-decoder":
         model = EncoderDecoderModel.from_pretrained(model_path, token=token_arg)
     elif model_type == "seq2seq":
@@ -68,6 +86,15 @@ def load_model_and_tokenizer(model_path, tokenizer_path, model_type, token=False
         raise ValueError(f"Unsupported model type: {model_type}")
     model.to("cuda" if torch.cuda.is_available() else "cpu")
     return model, tokenizer
+
+# Hàm xử lý Gemini
+def generate_with_gemini(model, text, task):
+    prompt = (
+        f"Với tư cách một chuyên gia hãy tạo tiêu đề ngắn gọn cho văn bản sau: {text}" if task == "Sinh tiêu đề"
+        else f"Vơi tư cách một chuyên gia hãy tạo tóm tắt cho văn bản: {text}"
+    )
+    response = model.generate_content(prompt)
+    return response.text.strip()
 
 # Init session state
 if "history" not in st.session_state:
@@ -100,7 +127,11 @@ if st.session_state.show_sidebar:
             for idx, history_item in enumerate(st.session_state.history):
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    if st.button(f"- {history_item['title']}", key=f"history_{idx}"):
+                    # Rút gọn câu đầu để hiển thị
+                    short_preview = history_item['title'].split('.')[0][:60]
+                    if len(history_item['title']) > 60:
+                        short_preview += "..."
+                    if st.button(f"- {short_preview}", key=f"history_{idx}"):
                         st.session_state.selected_history_index = idx
                         st.session_state.current_generated = None
                 with col2:
@@ -109,6 +140,7 @@ if st.session_state.show_sidebar:
                         if st.session_state.selected_history_index == idx:
                             st.session_state.selected_history_index = None
                         st.rerun()
+
 
 # Một chút CSS
 st.markdown("""
@@ -155,7 +187,6 @@ st.markdown("""
             padding-left: 2rem;
             padding-right: 2rem;
         }
-        /* Cards for output */
         .card {
             background-color: #1e1e1e;
             padding: 20px;
@@ -167,7 +198,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Main App
-#st.markdown("<h1 style='text-align: center; color: white;'>Trình sinh tiêu đề và tóm tắt</h1>", unsafe_allow_html=True)
 st.markdown("""
     <h1 style='text-align: center; color: white; font-family: "Segoe UI", sans-serif;'>
         🎯Trình Sinh Tiêu Đề & Tóm Tắt
@@ -211,7 +241,6 @@ if uploaded_file:
         from docx import Document
         doc = Document(uploaded_file)
         text_input = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-
     st.text_area("Nội dung file đã tải lên:", value=text_input, height=200, key="text_input_area", disabled=True)
 else:
     text_input = st.text_area("Nhập đoạn văn của bạn:", height=200, key="text_input_area")
@@ -231,55 +260,70 @@ if st.button(button_label, key="generate_button"):
             model_config.get("token", False)
         )
 
-        if model and tokenizer:
-            if model_config["model_type"] == "encoder-decoder":
+        if model:
+            if model_config["model_type"] == "gemini":
                 processed_text = clean_text(text_input)
-                processed_text = segment_text(processed_text)
+                try:
+                    with st.spinner(f"⏳ Đang {task_option.lower()} với mô hình '{selected_model_key}'..."):
+                        result = generate_with_gemini(model, processed_text, task_option)
+                    
+                    st.session_state.current_generated = result
+                    st.session_state.current_task = task_option
+
+                    st.session_state.history.append({
+                        "title": result,
+                        "input_text": text_input,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "model_name": selected_model_key
+                    })
+                    st.session_state.selected_history_index = None
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Đã xảy ra lỗi với Gemini: {e}")
+                    print(f"Error during Gemini processing: {e}")
             else:
-                processed_text = clean_text(text_input)
+                if model_config["model_type"] == "encoder-decoder":
+                    processed_text = clean_text(text_input)
+                    processed_text = segment_text(processed_text)
+                else:
+                    processed_text = clean_text(text_input)
 
-            try:
-                inputs = tokenizer(
-                    processed_text,
-                    padding="max_length",
-                    truncation=True,
-                    max_length=256,
-                    return_tensors="pt"
-                )
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                inputs = {key: value.to(device) for key, value in inputs.items()}
+                try:
+                    inputs = tokenizer(
+                        processed_text,
+                        padding="max_length",
+                        truncation=True,
+                        max_length=256,
+                        return_tensors="pt"
+                    )
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    inputs = {key: value.to(device) for key, value in inputs.items()}
 
-                with st.spinner(f"⏳ Đang {task_option.lower()} với mô hình '{selected_model_key}'..."):
+                    with st.spinner(f"⏳ Đang {task_option.lower()} với mô hình '{selected_model_key}'..."):
+                        with torch.no_grad():
+                            outputs = model.generate(
+                                inputs["input_ids"],
+                                max_length=80 if task_option == 'Sinh tiêu đề' else 200,
+                                num_beams=5,
+                                early_stopping=True,
+                                no_repeat_ngram_size=2
+                            )
+                        result = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
 
-                    with torch.no_grad():
-                        outputs = model.generate(
-                            inputs["input_ids"],
-                            max_length=80 if task_option == 'Sinh tiêu đề' else 200,
-                            num_beams=5,
-                            early_stopping=True,
-                            no_repeat_ngram_size=2
-                        )
+                    st.session_state.current_generated = result
+                    st.session_state.current_task = task_option
 
-                result = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
-
-                st.session_state.current_generated = result
-                st.session_state.current_task = task_option
-
-                st.session_state.history.append({
-                    "title": result,
-                    "input_text": text_input,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "model_name": selected_model_key
-                })
-                st.session_state.selected_history_index = None
-
-                #progress_message.empty()
-
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Đã xảy ra lỗi: {e}")
-                print(f"Error during processing: {e}")
+                    st.session_state.history.append({
+                        "title": result,
+                        "input_text": text_input,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "model_name": selected_model_key
+                    })
+                    st.session_state.selected_history_index = None
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Đã xảy ra lỗi: {e}")
+                    print(f"Error during processing: {e}")
 
 # Hiển thị kết quả sinh mới
 if st.session_state.current_generated:
