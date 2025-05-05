@@ -10,6 +10,7 @@ import transformers
 import google.generativeai as genai
 from utils.preprocessing import clean_text, segment_text
 
+
 # Giảm bớt cảnh báo
 logging.getLogger('streamlit.runtime.scriptrunner.script_run_context').setLevel(logging.ERROR)
 transformers.logging.set_verbosity_error()
@@ -287,6 +288,7 @@ if st.button(button_label, key="generate_button"):
                     processed_text = segment_text(processed_text)
                 else:
                     processed_text = clean_text(text_input)
+                    
 
                 try:
                     inputs = tokenizer(
@@ -309,6 +311,7 @@ if st.button(button_label, key="generate_button"):
                                 no_repeat_ngram_size=2
                             )
                         result = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+                        result = result.replace("_", " ")
 
                     st.session_state.current_generated = result
                     st.session_state.current_task = task_option
