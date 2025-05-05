@@ -200,7 +200,7 @@ st.markdown("""
 # Main App
 st.markdown("""
     <h1 style='text-align: center; color: white; font-family: "Segoe UI", sans-serif;'>
-        🎯Trình Sinh Tiêu Đề & Tóm Tắt
+        Trình Sinh Tiêu Đề & Tóm Tắt
     </h1>
 """, unsafe_allow_html=True)
 
