@@ -1,0 +1,6 @@
+Video:
+https://youtu.be/LQ_Y-8aKFMs
+Mã nguồn: 
+https://github.com/pililover/ML-Title-Generator
+Dữ liệu:
+https://drive.google.com/drive/folders/11fMg4dhxQTyBQMOXh4hY22FBUixe_jsi?usp=sharing
