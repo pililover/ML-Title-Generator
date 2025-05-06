@@ -1,6 +1,10 @@
-Video:
-https://youtu.be/LQ_Y-8aKFMs
+Video (Youtube hoặc Google Drive):
+- Youtube: https://youtu.be/LQ_Y-8aKFMs
+- Google Drive: https://drive.google.com/drive/folders/1PS2Jxsdo95CESuljbc73y6TJMd7JxaRY?usp=sharing
 Mã nguồn: 
 https://github.com/pililover/ML-Title-Generator
 Dữ liệu:
-https://drive.google.com/drive/folders/11fMg4dhxQTyBQMOXh4hY22FBUixe_jsi?usp=sharing
+- Sinh tiêu đề: https://drive.google.com/drive/folders/1RjtAoOzXUFAK7mcbJwvHpjQGKSjJmMfA?usp=sharing
+- Tóm tắt văn bản: https://www.kaggle.com/datasets/thuanhuynh2004/data-summarization-ml
+Triển khai:
+https://huggingface.co/spaces/HTThuanHcmus/title-generation-and-summarization
