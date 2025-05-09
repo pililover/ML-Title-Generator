@@ -70,7 +70,7 @@ SUMMARIZATION_MODELS = {
         "model_type": "seq2seq"
     },
     "Gemini Summarization": {
-        "model_path": "gemini-1.5-pro",
+        "model_path": "gemini-1.5-flash",
         "tokenizer_path": None,
         "token": False,
         "model_type": "gemini"
