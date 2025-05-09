@@ -9,8 +9,13 @@ import logging
 import transformers
 import google.generativeai as genai
 from utils.preprocessing import clean_text, segment_text
+import asyncio
 
-
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    
 # Giảm bớt cảnh báo
 logging.getLogger('streamlit.runtime.scriptrunner.script_run_context').setLevel(logging.ERROR)
 transformers.logging.set_verbosity_error()
@@ -19,7 +24,7 @@ transformers.logging.set_verbosity_error()
 st.set_page_config(page_title="Trình sinh tiêu đề", layout="centered")
 
 # Cấu hình Gemini API (thay YOUR_GEMINI_API_KEY bằng API key thực tế)
-GEMINI_API_KEY = "AIzaSyCAAhuSX60JYbS8eSRa_0dRZBri0mqUr_M"  # Thay bằng API key thực tế của bạn
+GEMINI_API_KEY = "AIzaSyCEDRquPDC9N09hTHGD9FfvsPP83AZT78Q"  # Thay bằng API key thực tế của bạn
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Các mô hình
@@ -43,7 +48,8 @@ TITLE_MODELS = {
         "model_type": "seq2seq"
     },
     "Gemini Title Generator": {
-        "model_path": "gemini-1.5-pro",
+        # "model_path": "gemini-1.5-pro",
+        "model_path" : "gemini-1.5-flash",
         "tokenizer_path": None,
         "token": False,
         "model_type": "gemini"
